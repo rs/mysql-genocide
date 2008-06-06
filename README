@@ -1,0 +1,184 @@
+NAME
+    mysql-genocide - Parallel operation on MySQL processlist
+
+SYNOPSIS
+    mysql-genocide [OPTIONS] [FILTER]
+
+     Options:
+       -h, --help               Show help.
+
+       Connection:
+       -h, --host=name          Connect to host.
+       -P, --port=#             Port number to use for connection.
+       -D, --database=name      Database to use.
+       -u, --user=name          User for login if not current user.
+       -p, --password=name      Password to use when connecting to server.
+
+       Filters:
+       -e, --exclude            Exclude queries by different criteria
+       -s, --selects-only       Exclude everything but selects
+       -t, --min-time=#         Exclude queries with exec time lower than #
+       -T, --timeout            Exclude queries with exec time lower than query time hint
+       -l, --limit=#            Only take first # lines
+       -g, --placeholder        Replace values in queries by placeholders
+       -d, --distinct           Only keep the first occurence of the same query
+       --sort                   Sort result
+
+       Actions:
+       -L, --list               Output list of queries
+       -K, --kill               Kill every matched threads
+       -S, --stats              Show some stats about processlist
+
+       -i, --interval[=#]       Repeat the command at regular interval
+
+OPTIONS
+    --help  Print a brief help message and exits.
+
+    --host, --port, --database, --user, --password
+            See mysql cli help for more information on those parameters.
+
+    --exclude=[!]name
+            Exclude from the running thread list queries matching the
+            argument. This parameter can be repeated several times to
+            exclude different kinds of queries. If you prefix the argument
+            with an exclamation mark (!), all thread not matching this
+            argument will be excluded. Allowed parameters are:
+
+            select, insert, replace, update, delete
+
+            Exclude SQL query which command is of the same name.
+
+            write
+
+            Exclude every SQL query doing write operation (insert, replace,
+            update, delete).
+
+            other
+
+            Exclude SQL query which are none of the above type.
+
+            sleep
+
+            Exclude all sleeping threads
+
+            system
+
+            Exclude thread ran by the system (often used for replication
+            threads)
+
+            user=<user>
+
+            Exclude threads ran by given mysql username.
+
+            db=<db>
+
+            Exclude threads using given database.
+
+            state=<state>
+
+            Exclude threads in given state.
+
+            See
+            <http://dev.mysql.com/doc/refman/5.0/en/general-thread-states.ht
+            ml> for the list of possible states
+
+            command=<command>
+
+            Exclude threads using given command.
+
+            See
+            <http://dev.mysql.com/doc/refman/5.0/en/thread-commands.html>
+            for the list of possible commands.
+
+    --selects-only
+            This is equivalent to: --exclude=write --exclude=other
+            --exclude=sleep --exclude=system.
+
+    --min-time=#
+            Exclude queries with execution time lower than given parameter.
+
+    --timeout
+            Keep only queries with a timeout provided and with an execution
+            time which exceeded this timeout. The timeout can be provided
+            with the query in a comment like this:
+
+              SELECT /* timeout:40 */ * FROM table;
+
+            Timeout is expressed in second.
+
+    --limit=#
+            Take first # threads and excludes others.
+
+    --placeholder
+            Will try to make queries more generic by replacing all values by
+            either "i" for numbers or "s" for strings.
+
+    --distinct
+            Keep only the first query from group of identical queries and
+            exlude others.
+
+            Note: If you use this option with --placeholder, queries that
+            would differ only by values used will become identical. This is
+            useful to distinct big type of queries.
+
+    --sort[=name]
+            Sort matched queries by parameter given as argument.
+
+            Allowed parameters are as follow:
+
+            concurrency or c
+
+            Sort queries by most repeated ones.
+
+            time or t
+
+            Sort queries by longer execution time.
+
+    --list[=template]
+            Output the result to the terminal.
+
+            The default output format can be changed by supplying a template
+            with desired field.
+
+            Available fields are: Id, User, Command, State, Db, Host, Time,
+            Info, Group, Concurrency, QType, Timeout
+
+            Default template is: <Id> <User> <Db> <Time> <Info>
+
+    --kill  Kill every threads that match the given filters.
+
+    --stats Show statistics about queries matched by filters.
+
+    --interval[=#]
+            Repeat the command at regular interval. Interval in second can
+            be specified as argument. If not specified, default interval is
+            5 seconds.
+
+  DESCRIPTION
+    mysql-genocide plays with MySQL processlist. It can filter it using
+    different criterias like execution time, query type, user or regexp
+    matching of the SQL query. Actions can then be peformed on the result
+    like killing, sorting or generating statistics.
+
+EXAMPLES
+    Kill all selects with execution time geater than 60 seconds:
+
+        mysql-genocide --selects-only --min-time 60 --kill
+
+    Same as before but limited on queries matching a pattern:
+
+        mysql-genocide -s -t 60 -K 'FROM user '
+
+    Kill all queries timed out:
+
+        mysql-genocide --timeout --kill
+
+    Replace queries values by placeholders and group identical queries
+    together, sort them by most concurrent and keep only the 10 most
+    concurent ones:
+
+        mysql-genocide --placeholder --group --sort concurrency --limit 10 --list
+
+AUTHOR
+    Olivier Poitrey <rs@dailymotion.com>
+

@@ -1,0 +1,609 @@
+#!/usr/bin/env perl
+
+=head1 NAME
+
+mysql-genocide - Parallel operation on MySQL processlist
+
+=head1 SYNOPSIS
+
+mysql-genocide [OPTIONS] [FILTER]
+
+ Options:
+   -h, --help               Show help.
+
+   Connection:
+   -h, --host=name          Connect to host.
+   -P, --port=#             Port number to use for connection.
+   -D, --database=name      Database to use.
+   -u, --user=name          User for login if not current user.
+   -p, --password=name      Password to use when connecting to server.
+
+   Filters:
+   -e, --exclude            Exclude queries by different criteria
+   -s, --selects-only       Exclude everything but selects
+   -t, --min-time=#         Exclude queries with exec time lower than #
+   -T, --timeout            Exclude queries with exec time lower than query time hint
+   -l, --limit=#            Only take first # lines
+   -g, --placeholder        Replace values in queries by placeholders
+   -d, --distinct           Only keep the first occurence of the same query
+   --sort                   Sort result
+
+   Actions:
+   -L, --list               Output list of queries
+   -K, --kill               Kill every matched threads
+   -S, --stats              Show some stats about processlist
+
+   -i, --interval[=#]       Repeat the command at regular interval
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--help>
+
+Print a brief help message and exits.
+
+=item B<--host>, B<--port>, B<--database>, B<--user>, B<--password>
+
+See B<mysql> cli help for more information on those parameters.
+
+=item B<--exclude=[!]name>
+
+Exclude from the running thread list queries matching the argument. This parameter can be repeated
+several times to exclude different kinds of queries. If you prefix the argument with an
+exclamation mark (!), all thread not matching this argument will be excluded.
+Allowed parameters are:
+
+B<select, insert, replace, update, delete>
+
+Exclude SQL query which command is of the same name.
+
+B<write>
+
+Exclude every SQL query doing write operation (insert, replace, update, delete).
+
+B<other>
+
+Exclude SQL query which are none of the above type.
+
+B<sleep>
+
+Exclude all sleeping threads
+
+B<system>
+
+Exclude thread ran by the system (often used for replication threads)
+
+B<user=><user>
+
+Exclude threads ran by given mysql username.
+
+B<db=><db>
+
+Exclude threads using given database.
+
+B<state=><state>
+
+Exclude threads in given state.
+
+See L<http://dev.mysql.com/doc/refman/5.0/en/general-thread-states.html> for the list of possible
+states
+
+B<command=><command>
+
+Exclude threads using given command.
+
+See L<http://dev.mysql.com/doc/refman/5.0/en/thread-commands.html> for the list of possible commands.
+
+=item B<--selects-only>
+
+This is equivalent to: --exclude=write --exclude=other --exclude=sleep --exclude=system.
+
+=item B<--min-time=#>
+
+Exclude queries with execution time lower than given parameter.
+
+=item B<--timeout>
+
+Keep only queries with a timeout provided and with an execution time which exceeded this timeout.
+The timeout can be provided with the query in a comment like this:
+
+  SELECT /* timeout:40 */ * FROM table;
+
+Timeout is expressed in second.
+
+=item B<--limit=#>
+
+Take first # threads and excludes others.
+
+=item B<--placeholder>
+
+Will try to make queries more generic by replacing all values by either "i" for numbers
+or "s" for strings.
+
+=item B<--distinct>
+
+Keep only the first query from group of identical queries and exlude others.
+
+Note: If you use this option with B<--placeholder>, queries that would differ
+only by values used will become identical. This is useful to distinct big type of
+queries.
+
+=item B<--sort[=name]>
+
+Sort matched queries by parameter given as argument.
+
+Allowed parameters are as follow:
+
+B<concurrency> or B<c>
+
+Sort queries by most repeated ones.
+
+B<time> or B<t>
+
+Sort queries by longer execution time.
+
+=item B<--list[=template]>
+
+Output the result to the terminal.
+
+The default output format can be changed by supplying a template with desired field.
+
+Available fields are: B<Id>, B<User>, B<Command>, B<State>, B<Db>, B<Host>, B<Time>, B<Info>,
+B<Group>, B<Concurrency>, B<QType>, B<Timeout>
+
+Default template is: <Id> <User> <Db> <Time> <Info>
+
+=item B<--kill>
+
+Kill every threads that match the given filters.
+
+=item B<--stats>
+
+Show statistics about queries matched by filters.
+
+=item B<--interval[=#]>
+
+Repeat the command at regular interval. Interval in second can be specified as argument. If not
+specified, default interval is 5 seconds.
+
+=back
+
+=head2 DESCRIPTION
+
+mysql-genocide plays with MySQL processlist. It can filter it using different criterias like
+execution time, query type, user or regexp matching of the SQL query. Actions can then be peformed
+on the result like killing, sorting or generating statistics.
+
+=head1 EXAMPLES
+
+Kill all selects with execution time geater than 60 seconds:
+
+    mysql-genocide --selects-only --min-time 60 --kill
+
+Same as before but limited on queries matching a pattern:
+
+    mysql-genocide -s -t 60 -K 'FROM user '
+
+Kill all queries timed out:
+
+    mysql-genocide --timeout --kill
+
+Replace queries values by placeholders and group identical queries together, sort them by most
+concurrent and keep only the 10 most concurent ones:
+
+    mysql-genocide --placeholder --group --sort concurrency --limit 10 --list
+
+=head1 AUTHOR
+
+Olivier Poitrey <rs@dailymotion.com>
+
+=cut
+
+use strict;
+use warnings;
+use DBI;
+use Getopt::Long;
+use Pod::Usage;
+
+our $VERSION = "0.1";
+our %EXCLUDE;
+our %INCLUDE;
+our %OPTS =
+(
+    'help'            => 0,
+
+    'host|h=s'        => undef,
+    'port|P=i'        => undef,
+    'database|D=s'    => undef,
+    'user|u=s'        => $ENV{'USER'},
+    'password|p=s'    => undef,
+
+    'filter|f'        => undef,
+    'exclude|e=s'     => [],
+    'selects-only|s'  => 0,
+    'min-time|t=i'    => undef,
+    'timeout|T'  => undef,
+    'limit|l=i'       => undef,
+    'placeholder|g'   => 0,
+    'distinct|d'      => undef,
+    'sort=s'          => undef,
+
+    'kill|K'          => 0,
+    'stats|S'         => 0,
+    'list|L:s'        => undef,
+
+    'interval|i:i'    => undef,
+);
+
+my @opts = (\%OPTS);
+foreach my $param (keys(%OPTS))
+{
+    push(@opts, $param);
+    my $key = $param;
+    my $value = $OPTS{$param};
+    $key =~ s/^(.*?)([=|:].*)?$/$1/;
+    delete($OPTS{$param});
+    $OPTS{$key} = $value;
+}
+
+Getopt::Long::Configure("bundling");
+GetOptions(@opts) or pod2usage(2);
+
+pod2usage(1) if($OPTS{'help'});
+
+if(!$OPTS{'list'} && !$OPTS{'kill'} && !$OPTS{'stats'})
+{
+    $OPTS{'list'} = '';
+}
+
+if($OPTS{'sort'})
+{
+    if($OPTS{'sort'} eq 'concurrency' or $OPTS{'sort'} eq 'c')
+    {
+        $OPTS{'sort'} = 'concurrency';
+    }
+    elsif($OPTS{'sort'} eq 'time' or $OPTS{'sort'} eq 't')
+    {
+        $OPTS{'sort'} = 'time';
+    }
+    else
+    {
+        pod2usage('Invalid sort: ' . $OPTS{'sort'});
+    }
+}
+
+foreach(@{$OPTS{'exclude'}})
+{
+    if(/^(!?)(select|insert|replace|update|delete|write|other|sleep|system)$/i)
+    {
+        if($1 eq '!')
+        {
+            $INCLUDE{lc($2)} = 1;
+        }
+        else
+        {
+            $EXCLUDE{lc($2)} = 1;
+        }
+    }
+    elsif(/^(!?)(db|user|state|command)=(\w+)$/)
+    {
+        if($1 eq '!')
+        {
+            push(@{$INCLUDE{$2}}, $3);
+        }
+        else
+        {
+            push(@{$EXCLUDE{$2}}, $3);
+        }
+    }
+    else
+    {
+        pod2usage("Invalid exclude argument: $_");
+    }
+}
+
+if($OPTS{'selects-only'})
+{
+    $EXCLUDE{'!select'} = 1;
+}
+
+if(defined($OPTS{'interval'}) && $OPTS{'interval'} eq '')
+{
+    $OPTS{'interval'} = 5;
+}
+
+my $dsn = 'DBI:mysql:';
+$dsn .= 'database=' . $OPTS{'database'} . ';' if($OPTS{'database'});
+$dsn .= 'host='     . $OPTS{'host'}     . ';' if($OPTS{'host'});
+$dsn .= 'port='     . $OPTS{'port'}     . ';' if($OPTS{'port'});
+$dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/my.cnf';
+
+my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'});
+
+while(1)
+{
+    my $sth = $dbh->prepare('SHOW FULL PROCESSLIST');
+    $sth->execute();
+
+    my $proc;
+    my @proclist;
+    my %threads;
+    my %concurrency;
+
+    PROC: while($proc = $sth->fetchrow_hashref())
+    {
+        $proc->{'Db'}       = $proc->{'db'};
+        $proc->{'Timeout'}  = undef;
+
+        if(defined($proc->{'Info'}) && $proc->{'Info'} ne '')
+        {
+            if($proc->{'User'} eq 'system user')
+            {
+                $proc->{'QType'} = 'system';
+            }
+            elsif($proc->{'Info'} =~ /(INSERT|REPLACE|UPDATE|DELETE)\s/i)
+            {
+                $proc->{'QType'} = lc($1);
+            }
+            # test select separatly to ensure INSERT ... SELECT ... queries ends up to insert
+            elsif($proc->{'Info'} =~ /SELECT\s/i)
+            {
+                $proc->{'QType'} = 'select';
+            }
+            else
+            {
+                $proc->{'QType'} = 'other';
+            }
+
+            # clean SQL query indentation
+            $proc->{'Info'} =~ s/[\n\s]+/ /gm;
+
+            # parse timeout hint
+            if($proc->{'Info'} =~ m!/\*.*?timeout\s*:\s*(\d+).*?\*/!)
+            {
+                $proc->{'Timeout'} = $1;
+            }
+
+            if($OPTS{'placeholder'})
+            {
+                $proc->{'Info'} =~ s/\s*,\s*/, /g;
+                $proc->{'Info'} =~ s/\s*(=|<>|!=|<|<=|>|>=)\s*/ $1 /g;
+                $proc->{'Info'} =~ s/(=|<>|!=|<|<=|>|>=)\s('|").*?\2/$1 s/g;
+                $proc->{'Info'} =~ s/(=|<>|!=|<|<=|>|>=)\s\d+/$1 i/g;
+            }
+        }
+        else
+        {
+            if($proc->{'Command'} eq 'Sleep')
+            {
+                $proc->{'QType'} = 'sleep';
+            }
+            elsif($proc->{'Command'} eq 'Query')
+            {
+                $proc->{'QType'} = 'other';
+            }
+            else
+            {
+                $proc->{'QType'} = 'system';
+            }
+        }
+
+        if(defined($OPTS{'filter'}) && $proc->{'Info'} !~ /$OPTS{'filter'}/o)
+        {
+            next;
+        }
+
+        if(defined($OPTS{'min-time'}))
+        {
+            next if $proc->{'Time'} < $OPTS{'min-time'};
+        }
+
+        if($OPTS{'timeout'} && (!defined($proc->{'Timeout'}) || $proc->{'Time'} < $proc->{'Timeout'}))
+        {
+            next;
+        }
+
+        if($EXCLUDE{$proc->{'QType'}})
+        {
+            next if $EXCLUDE{$proc->{'QType'}};
+        }
+        foreach(qw(select insert replace update delete other sleep system))
+        {
+            next PROC if $INCLUDE{$_} && $proc->{'QType'} ne $_;
+        }
+
+        if($EXCLUDE{'write'})
+        {
+            next if $proc->{'QType'} =~ /^(insert|replace|update|delete)$/;
+        }
+        if($INCLUDE{'write'})
+        {
+            next if $proc->{'QType'} !~ /^(insert|replace|update|delete)$/;
+        }
+
+        foreach my $param (qw(db user state command))
+        {
+            if($EXCLUDE{$param})
+            {
+                my $value = lc($proc->{ucfirst($param)});
+
+                foreach(@{$EXCLUDE{$param}})
+                {
+                    next PROC if $value eq $_;
+                }
+            }
+            if($INCLUDE{$param})
+            {
+                my $value = lc($proc->{ucfirst($param)});
+
+                foreach(@{$INCLUDE{$param}})
+                {
+                    next PROC if $value ne $_;
+                }
+            }
+        }
+
+        if(defined($proc->{'Info'}))
+        {
+            push(@{$concurrency{$proc->{'Info'}}}, $proc->{'Id'});
+        }
+        else
+        {
+            push(@{$concurrency{$proc->{'Command'}}}, $proc->{'Id'});
+        }
+
+        if(!$OPTS{'sort'})
+        {
+            push(@proclist, $proc->{'Id'});
+
+            if($OPTS{'limit'} && @proclist >= $OPTS{'limit'})
+            {
+                # asked for only first N lines and no sort are applied, we can
+                # save us from parsing more lines
+                last PROC;
+            }
+        }
+
+        $threads{$proc->{'Id'}} = $proc;
+    }
+
+    $sth->finish();
+
+    my $group = 0;
+    foreach(keys(%concurrency))
+    {
+        $group++;
+        my $concurrency = scalar @{$concurrency{$_}};
+
+        foreach my $id (@{$concurrency{$_}})
+        {
+            $threads{$id}->{'Concurrency'} = $concurrency;
+            $threads{$id}->{'Group'}       = $group;
+        }
+    }
+
+    if($OPTS{'sort'})
+    {
+        @proclist = ();
+        my $limit = $OPTS{'limit'};
+        my $field = ucfirst($OPTS{'sort'});
+        my %seen_groups;
+
+        foreach(sort {$threads{$b}->{$field} <=> $threads{$a}->{$field}} keys(%threads))
+        {
+            if($OPTS{'distinct'})
+            {
+                $group = $threads{$_}->{'Group'};
+                next if $seen_groups{$group};
+                $seen_groups{$group} = 1;
+            }
+
+            push(@proclist, $_);
+
+            last if defined $limit && --$limit <= 0;
+        }
+    }
+    elsif($OPTS{'distinct'})
+    {
+        my @new_proclist;
+        my %seen_groups;
+
+        foreach(@proclist)
+        {
+            $group = $threads{$_}->{'Group'};
+            next if $seen_groups{$group};
+            $seen_groups{$group} = 1;
+            push(@new_proclist, $_);
+        }
+
+        @proclist = @new_proclist;
+    }
+
+
+    if($OPTS{'kill'})
+    {
+        foreach(@proclist)
+        {
+            $dbh->do('KILL ' . $_);
+        }
+    }
+
+    if($OPTS{'stats'})
+    {
+        my($title, $count, %stats);
+
+        foreach(@proclist)
+        {
+            if(defined($threads{$_}->{'QType'}))
+            {
+                $stats{'qtype'}{$threads{$_}->{'QType'}}++;
+            }
+            if(defined($threads{$_}->{'Command'}))
+            {
+                $stats{'command'}{$threads{$_}->{'Command'}}++;
+            }
+            if(defined($threads{$_}->{'State'}) && $threads{$_}->{'State'} ne '')
+            {
+                $stats{'state'}{$threads{$_}->{'State'}}++;
+            }
+            else
+            {
+                $stats{'state'}{'NULL'}++;
+            }
+        }
+
+        foreach my $type (keys(%stats))
+        {
+            my $total = 0;
+
+            printf("%s: \n", ucfirst($type));
+
+            foreach (sort {$stats{$type}->{$b} <=> $stats{$type}->{$a}} keys(%{$stats{$type}}))
+            {
+                printf("    %d %s\n", $stats{$type}->{$_}, $_);
+                $total += $stats{$type}->{$_};
+            }
+        }
+    }
+
+    if(defined($OPTS{'list'}))
+    {
+        my($line, $value);
+
+        if($OPTS{'list'} eq '')
+        {
+            if($OPTS{'distinct'} || ($OPTS{'sort'} && $OPTS{'sort'} eq 'concurrency'))
+            {
+                $OPTS{'list'} = '<Concurrency> <Id> <User> <Db> <Time> <Info>';
+            }
+            else
+            {
+                $OPTS{'list'} = '<Id> <User> <Db> <Time> <Info>';
+            }
+        }
+
+        foreach(@proclist)
+        {
+            $proc = $threads{$_};
+            $line = $OPTS{'list'};
+
+            foreach my $field (keys(%$proc))
+            {
+                my $value = defined($proc->{$field}) ? $proc->{$field} : '-';
+                $line =~ s/<$field>/$value/eg;
+            }
+
+            print $line . "\n";
+        }
+    }
+
+    if($OPTS{'interval'})
+    {
+        sleep($OPTS{'interval'});
+    }
+    else
+    {
+        last;
+    }
+}
