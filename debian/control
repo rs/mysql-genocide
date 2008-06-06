@@ -1,0 +1,15 @@
+Source: mysql-genocide
+Section: misc
+Priority: optional
+Build-Depends: debhelper (>= 4.0.2)
+Build-Depends-Indep: perl (>= 5.8.0-7)
+Maintainer: Olivier Poitrey <rs@dailymotion.com>
+Standards-Version: 3.6.1
+
+Package: mysql-genocide
+Architecture: all
+Depends: ${perl:Depends}, ${misc:Depends}, libdbd-mysql-perl
+Description: mysql-genocide helps you play with big MySQL processlists.
+It can filter it using different criterias like execution time, query
+type, user or regexp matching of the SQL query etc. Actions can then be
+peformed on the result like killing, sorting or generating statistics.
