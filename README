@@ -154,7 +154,7 @@ OPTIONS
             be specified as argument. If not specified, default interval is
             5 seconds.
 
-  DESCRIPTION
+DESCRIPTION
     mysql-genocide plays with MySQL processlist. It can filter it using
     different criterias like execution time, query type, user or regexp
     matching of the SQL query. Actions can then be peformed on the result
@@ -178,6 +178,16 @@ EXAMPLES
     concurent ones:
 
         mysql-genocide --placeholder --group --sort concurrency --limit 10 --list
+
+SCRIPT CATEGORIES
+    Unix/System_administration
+
+PREREQUISITES
+    This script requires the "DBD::mysql", "Getopt::Long" and "Pod::Usage"
+    modules.
+
+OSNAMES
+    any
 
 AUTHOR
     Olivier Poitrey <rs@dailymotion.com>

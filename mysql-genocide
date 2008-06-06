@@ -169,11 +169,11 @@ specified, default interval is 5 seconds.
 
 =back
 
-=head2 DESCRIPTION
+=head1 DESCRIPTION
 
-mysql-genocide plays with MySQL processlist. It can filter it using different criterias like
-execution time, query type, user or regexp matching of the SQL query. Actions can then be peformed
-on the result like killing, sorting or generating statistics.
+mysql-genocide helps you play with big MySQL processlists. It can filter it using different
+criterias like execution time, query type, user or regexp matching of the SQL query etc. Actions
+can then be peformed on the result like killing, sorting or generating statistics.
 
 =head1 EXAMPLES
 
@@ -194,6 +194,18 @@ concurrent and keep only the 10 most concurent ones:
 
     mysql-genocide --placeholder --group --sort concurrency --limit 10 --list
 
+=head1 SCRIPT CATEGORIES
+
+Unix/System_administration
+
+=head1 PREREQUISITES
+
+This script requires the C<DBD::mysql>, C<Getopt::Long> and C<Pod::Usage> modules.
+
+=head1 OSNAMES
+
+any
+
 =head1 AUTHOR
 
 Olivier Poitrey <rs@dailymotion.com>
@@ -206,7 +218,7 @@ use DBI;
 use Getopt::Long;
 use Pod::Usage;
 
-our $VERSION = "0.1";
+our $VERSION = "0.01";
 our %EXCLUDE;
 our %INCLUDE;
 our %OPTS =
