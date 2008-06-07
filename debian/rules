@@ -19,8 +19,6 @@ clean:
 	dh_testdir
 	dh_testroot
 
-	-$(MAKE) distclean
-	
 	dh_clean build-stamp install-stamp
 
 install: install-stamp
