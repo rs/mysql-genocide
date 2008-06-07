@@ -44,7 +44,7 @@ OPTIONS
             with an exclamation mark (!), all thread not matching this
             argument will be excluded. Allowed parameters are:
 
-            select, insert, replace, update, delete
+            select, insert, replace, update, delete, create, drop, alter
 
             Exclude SQL query which command is of the same name.
 
@@ -155,10 +155,10 @@ OPTIONS
             5 seconds.
 
 DESCRIPTION
-    mysql-genocide plays with MySQL processlist. It can filter it using
-    different criterias like execution time, query type, user or regexp
-    matching of the SQL query. Actions can then be peformed on the result
-    like killing, sorting or generating statistics.
+    mysql-genocide helps you play with big MySQL processlists. It can filter
+    it using different criterias like execution time, query type, user or
+    regexp matching of the SQL query etc. Actions can then be peformed on
+    the result like killing, sorting or generating statistics.
 
 EXAMPLES
     Kill all selects with execution time geater than 60 seconds:

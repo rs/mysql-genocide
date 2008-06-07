@@ -54,7 +54,7 @@ several times to exclude different kinds of queries. If you prefix the argument 
 exclamation mark (!), all thread not matching this argument will be excluded.
 Allowed parameters are:
 
-B<select, insert, replace, update, delete>
+B<select, insert, replace, update, delete, create, drop, alter>
 
 Exclude SQL query which command is of the same name.
 
@@ -219,6 +219,8 @@ use Getopt::Long;
 use Pod::Usage;
 
 our $VERSION = "0.01";
+our @WRITE_CMD = qw(insert replace update delete create drop alter);
+our $WRITE_CMD_RE = join('|', @WRITE_CMD);
 our %EXCLUDE;
 our %INCLUDE;
 our %OPTS =
@@ -287,7 +289,7 @@ if($OPTS{'sort'})
 
 foreach(@{$OPTS{'exclude'}})
 {
-    if(/^(!?)(select|insert|replace|update|delete|write|other|sleep|system)$/i)
+    if(/^(!?)(select|insert|replace|update|delete|create|drop|alter|write|other|sleep|system)$/i)
     {
         if($1 eq '!')
         {
@@ -317,7 +319,7 @@ foreach(@{$OPTS{'exclude'}})
 
 if($OPTS{'selects-only'})
 {
-    $EXCLUDE{'!select'} = 1;
+    $INCLUDE{'select'} = 1;
 }
 
 if(defined($OPTS{'interval'}) && $OPTS{'interval'} eq '')
@@ -331,7 +333,8 @@ $dsn .= 'host='     . $OPTS{'host'}     . ';' if($OPTS{'host'});
 $dsn .= 'port='     . $OPTS{'port'}     . ';' if($OPTS{'port'});
 $dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/my.cnf';
 
-my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'});
+my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'})
+    or die('Cannot connect to database server');
 
 while(1)
 {
@@ -354,7 +357,7 @@ while(1)
             {
                 $proc->{'QType'} = 'system';
             }
-            elsif($proc->{'Info'} =~ /(INSERT|REPLACE|UPDATE|DELETE)\s/i)
+            elsif($proc->{'Info'} =~ /($WRITE_CMD_RE)\s/io)
             {
                 $proc->{'QType'} = lc($1);
             }
@@ -406,7 +409,7 @@ while(1)
             next;
         }
 
-        if(defined($OPTS{'min-time'}))
+        if(defined($OPTS{'min-time'}) && defined($proc->{'Time'}))
         {
             next if $proc->{'Time'} < $OPTS{'min-time'};
         }
@@ -420,18 +423,18 @@ while(1)
         {
             next if $EXCLUDE{$proc->{'QType'}};
         }
-        foreach(qw(select insert replace update delete other sleep system))
+        foreach(@WRITE_CMD, qw(select other sleep system))
         {
             next PROC if $INCLUDE{$_} && $proc->{'QType'} ne $_;
         }
 
         if($EXCLUDE{'write'})
         {
-            next if $proc->{'QType'} =~ /^(insert|replace|update|delete)$/;
+            next if $proc->{'QType'} =~ /^($WRITE_CMD_RE)$/o;
         }
         if($INCLUDE{'write'})
         {
-            next if $proc->{'QType'} !~ /^(insert|replace|update|delete)$/;
+            next if $proc->{'QType'} !~ /^($WRITE_CMD_RE)$/o;
         }
 
         foreach my $param (qw(db user state command))
@@ -544,6 +547,8 @@ while(1)
     if($OPTS{'stats'})
     {
         my($title, $count, %stats);
+
+        // TODO: total cnx, replication delay
 
         foreach(@proclist)
         {
