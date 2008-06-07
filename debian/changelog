@@ -1,6 +1,14 @@
+mysql-genocide (0.02) unstable; urgency=low
+
+  * 8337949... Fix a bug with --interval option without parameter
+  * fccb070... Merge branch 'master' of git@git.dailymotion.com:mysql-genocide
+  * d27b787... Add create/drop/alter SQL command in excludable commands + better handling of connection error
+
+ -- Olivier Poitrey <rs@dailymotion.com>  Thu,  7 Jun 2008 20:13:00 +0100
+
 mysql-genocide (0.01) unstable; urgency=low
 
   * Initial release.
 
- -- Olivier Poitrey <rs@dailymotion.com>  Thu,  2 Dec 2004 12:34:00 +0100
+ -- Olivier Poitrey <rs@dailymotion.com>  Thu,  6 Jun 2008 12:34:00 +0100
 
