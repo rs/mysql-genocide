@@ -322,7 +322,7 @@ if($OPTS{'selects-only'})
     $INCLUDE{'select'} = 1;
 }
 
-if(defined($OPTS{'interval'}) && $OPTS{'interval'} eq '')
+if(defined($OPTS{'interval'}) && $OPTS{'interval'} == 0)
 {
     $OPTS{'interval'} = 5;
 }
@@ -548,7 +548,7 @@ while(1)
     {
         my($title, $count, %stats);
 
-        // TODO: total cnx, replication delay
+        # TODO: total cnx, replication delay
 
         foreach(@proclist)
         {
