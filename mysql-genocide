@@ -331,7 +331,11 @@ my $dsn = 'DBI:mysql:';
 $dsn .= 'database=' . $OPTS{'database'} . ';' if($OPTS{'database'});
 $dsn .= 'host='     . $OPTS{'host'}     . ';' if($OPTS{'host'});
 $dsn .= 'port='     . $OPTS{'port'}     . ';' if($OPTS{'port'});
-$dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/my.cnf';
+
+if(defined($ENV{'HOME'}))
+{
+    $dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/.my.cnf';
+}
 
 my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'})
     or die('Cannot connect to database server');
