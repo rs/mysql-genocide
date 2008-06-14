@@ -1,3 +1,11 @@
+mysql-genocide (0.03) unstable; urgency=low
+
+  * 8ee61ad... Move SQL cleaning before query type identification
+  * 21c7f12... Add DO_NOT_KILL SQL extended info support + doc on SQL extended info options
+  * f4e36fe... Handle missing HOME environement + fix my.cnf filename
+
+ -- Olivier Poitrey <rs@dailymotion.com>  Thu,  14 Jun 2008 04:54:22 +0100
+
 mysql-genocide (0.02) unstable; urgency=low
 
   * 8337949... Fix a bug with --interval option without parameter

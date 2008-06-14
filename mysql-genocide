@@ -254,7 +254,7 @@ use DBI;
 use Getopt::Long;
 use Pod::Usage;
 
-our $VERSION = "0.02";
+our $VERSION = "0.03";
 our @WRITE_CMD = qw(insert replace update delete create drop alter);
 our $WRITE_CMD_RE = join('|', @WRITE_CMD);
 our %EXCLUDE;
