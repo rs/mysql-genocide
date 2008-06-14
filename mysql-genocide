@@ -394,6 +394,9 @@ while(1)
 
         if(defined($proc->{'Info'}) && $proc->{'Info'} ne '')
         {
+            # clean SQL query indentation
+            $proc->{'Info'} =~ s/[\n\s]+/ /gm;
+
             if($proc->{'User'} eq 'system user')
             {
                 $proc->{'QType'} = 'system';
@@ -411,9 +414,6 @@ while(1)
             {
                 $proc->{'QType'} = 'other';
             }
-
-            # clean SQL query indentation
-            $proc->{'Info'} =~ s/[\n\s]+/ /gm;
 
             # parse timeout hint
             if($proc->{'Info'} =~ m!/\*.*?TIMEOUT\s*:\s*(\d+).*?\*/!i)
