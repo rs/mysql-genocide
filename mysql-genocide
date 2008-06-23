@@ -373,8 +373,9 @@ if(defined($ENV{'HOME'}))
     $dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/.my.cnf';
 }
 
-my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'})
-    or die('Cannot connect to database server');
+my $dbh = DBI->connect($dsn, $OPTS{'user'}, $OPTS{'password'}, {RaiseError => 1});
+
+$dbh->{mysql_auto_reconnect} = 1;
 
 while(1)
 {
