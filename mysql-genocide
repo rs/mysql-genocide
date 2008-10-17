@@ -407,7 +407,7 @@ while(1)
                 $proc->{'QType'} = lc($1);
             }
             # test select separatly to ensure INSERT ... SELECT ... queries ends up to insert
-            elsif($proc->{'Info'} =~ /SELECT\s/i)
+            elsif($proc->{'Info'} =~ /SELECT\s/i && $proc->{'Command'} ne 'Killed')
             {
                 $proc->{'QType'} = 'select';
             }
