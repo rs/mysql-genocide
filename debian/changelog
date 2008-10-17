@@ -1,3 +1,9 @@
+mysql-genocide (0.04) unstable; urgency=low
+
+  * 0429db8... Fix handling of zombie queries
+
+ -- Guillaume Lefranc <tanj@dailymotion.com>  Fri, 17 Oct 2008 18:49:22 +0200
+
 mysql-genocide (0.03) unstable; urgency=low
 
   * 8ee61ad... Move SQL cleaning before query type identification
