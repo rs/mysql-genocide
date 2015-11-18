@@ -266,7 +266,7 @@ our %OPTS =
     'host|h=s'        => undef,
     'port|P=i'        => undef,
     'database|D=s'    => undef,
-    'user|u=s'        => $ENV{'USER'},
+    'user|u=s'        => undef,
     'password|p=s'    => undef,
 
     'filter|f'        => undef,
@@ -368,7 +368,7 @@ $dsn .= 'database=' . $OPTS{'database'} . ';' if($OPTS{'database'});
 $dsn .= 'host='     . $OPTS{'host'}     . ';' if($OPTS{'host'});
 $dsn .= 'port='     . $OPTS{'port'}     . ';' if($OPTS{'port'});
 
-if(defined($ENV{'HOME'}))
+if(defined($ENV{'HOME'}) and -e $ENV{'HOME'} . '/.my.cnf')
 {
     $dsn .= 'mysql_read_default_file=' . $ENV{'HOME'} . '/.my.cnf';
 }
